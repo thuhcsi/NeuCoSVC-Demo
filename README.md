@@ -37,7 +37,7 @@ Then you need to put the WavLM-Large.pt file and model.pkl folder in the `pretra
 
 ## Inference
 
-Note that the source waveform must be 24kHz. `--speech_enroll` is recommended when using speech as the reference audio, and the pitch of the reference audio will be increased to 1.2 times when performing a pitch shift to cover the pitch gap between singing and speech.
+Note that the source waveform must be 24kHz, and both the source audio and the reference audio should be mono. `--speech_enroll` is recommended when using speech as the reference audio, and the pitch of the reference audio will be increased to 1.2 times when performing a pitch shift to cover the pitch gap between singing and speech.
 
 ```bash
 python infer.py --src_wav_path src-wav-path --ref_wav_path ref-wav-path --out_path out-path --speech_enroll
