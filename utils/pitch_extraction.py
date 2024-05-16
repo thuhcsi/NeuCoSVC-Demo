@@ -3,61 +3,16 @@ import os
 import random
 import librosa
 import parselmouth
-import argparse
-from pathlib import Path
-from multiprocessing import Process
-from tqdm import tqdm
 
-from utils.spectrogram import AWeightingLoudness
 from utils.tools import load_wav
 
 np.random.seed(0)
 random.seed(0)
 
 
-def extract_loudness(wav_path: str | Path, ld_path: str | Path=None, frame_period=0.01, factor=0):
-    """
-    Extracts loudness information from an audio waveform.
-
-    Args:
-        wav_path (str or Path): Path to the audio waveform file (must be 24kHz)
-        ld_path (str or Path, optional): Path to load or save the extracted loudness information as a numpy file. 
-            If specified, the function will first attempt to load the loudness information from this path. 
-            If the file does not exist, the loudness will be calculated and saved to this path. 
-            Defaults to None.
-        frame_period (float, optional): Time duration in seconds for each frame. Defaults to 0.01.
-        factor (float, optional): Loudness adjustment factor to fit different persons. Defaults to 0.
-
-    Returns:
-        numpy.ndarray: Extracted loudness information.
-
-    """
-    if ld_path is not None and os.path.isfile(ld_path):
-        loudness = np.load(ld_path)
-        return loudness
-    else:
-        # extract loudness using 24kHz audio
-        wav, fs = load_wav(wav_path, 24000)
-        loudness = AWeightingLoudness(
-            x=wav,
-            sr=fs,
-            n_fft=2048,
-            n_shift=int(fs*frame_period),
-            win_length=2048,
-            window='hann',
-        )
-        loudness = loudness + factor
-
-        if ld_path is not None:
-            os.makedirs(ld_path.parent, exist_ok=True)
-            np.save(ld_path, loudness)
-
-        return loudness
-
-
 def REAPER_F0(wav_path, sr=24000, frame_period=0.01):  # frame_period s
     if not os.path.isfile(f'{wav_path}.f0'):
-        cmd = f'convenient_place_for_repository/REAPER/build/reaper -i {wav_path} -f {wav_path}.f0 -e {frame_period} -x 1000 -m 65 -a'
+        cmd = f'path-to-reaper -i {wav_path} -f {wav_path}.f0 -e {frame_period} -x 1000 -m 65 -a'
         os.system(cmd)
     f0 = []
     try:
@@ -157,11 +112,14 @@ def compute_pitch(wav_path: str, pitch_path: str=None, frame_period=0.01):
         # Compute pitch using PYIN algorithm
         f0 = PYIN_F0(wav, sr=fs, frame_period=frame_period*1000)
         compute_median.append(f0)
+
         # Compute pitch using ParselMouth algorithm
         f0 = ParselMouth_F0(wav, sr=fs, frame_period=frame_period)
         compute_median.append(f0)
+
         # Compute pitch using REAPER algorithm
         f0 = REAPER_F0(wav_path, sr=fs, frame_period=frame_period)
+
         if f0 is not None:
             compute_median.append(f0)
 
@@ -173,6 +131,28 @@ def compute_pitch(wav_path: str, pitch_path: str=None, frame_period=0.01):
             os.makedirs(pitch_path.parent, exist_ok=True)
             np.save(pitch_path, median_f0)
         return median_f0
+
+
+def coarse_f0(f0):
+    f0_bin = 256
+    f0_max = 1000.0
+    f0_min = 65.0
+    f0_mel_min = 1127 * np.log(1 + f0_min / 700)
+    f0_mel_max = 1127 * np.log(1 + f0_max / 700)
+    f0_mel = 1127 * np.log(1 + f0 / 700)
+    f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * (
+        f0_bin - 2
+    ) / (f0_mel_max - f0_mel_min) + 1
+
+    # use 0 or 1
+    f0_mel[f0_mel <= 1] = 1
+    f0_mel[f0_mel > f0_bin - 1] = f0_bin - 1
+    f0_coarse = np.rint(f0_mel).astype(int)
+    assert f0_coarse.max() <= 255 and f0_coarse.min() >= 1, (
+        f0_coarse.max(),
+        f0_coarse.min(),
+    )
+    return f0_coarse
 
 
 def extract_pitch_ref(wav_path: str, ref_path: str, predefined_factor=0, speech_enroll=False):
@@ -199,8 +179,8 @@ def extract_pitch_ref(wav_path: str, ref_path: str, predefined_factor=0, speech_
         factor = predefined_factor
     else:
         # Compute mean and std for pitch with the reference audio
-        ref_wav, fs = load_wav(ref_path)
-        ref_f0 = ParselMouth_F0(ref_wav, fs)
+        ref_wav, ref_fs = load_wav(ref_path)
+        ref_f0 = ParselMouth_F0(ref_wav, ref_fs)
         nonzero_indices = np.nonzero(ref_f0)
         ref_mean = np.mean(ref_f0[nonzero_indices], axis=0)
         factor = ref_mean / source_mean
@@ -212,45 +192,3 @@ def extract_pitch_ref(wav_path: str, ref_path: str, predefined_factor=0, speech_
     source_f0 = source_f0 * factor
 
     return source_f0, factor
-
-
-def go(files, audio_dir, pitch_dir, ld_dir, rank):
-    if rank == 0:
-        pb = tqdm(files)
-    else:
-        pb = files
-
-    for file in pb:
-        ld = extract_loudness(file, (ld_dir/file.relative_to(audio_dir)).with_suffix('.npy'))
-        f0 = compute_pitch(file, (pitch_dir/file.relative_to(audio_dir)).with_suffix('.npy'))
-
-
-def main(args):
-    data_root = Path(args.data_root)
-    pitch_dir = Path(args.pitch_dir) if args.pitch_dir is not None else data_root/'pitch'
-    ld_dir = Path(args.ld_dir) if args.ld_dir is not None else data_root/'loudness'
-    n_p = args.n_cpu
-    files = list(data_root.rglob('*.wav'))
-    print(f"{len(files)} files to extract")
-    ps = []
-    for i in range(n_p):
-        p = Process(
-            target=go,
-            args=(files[i::n_p], data_root, pitch_dir, ld_dir, i)
-        )
-        ps.append(p)
-        p.start()
-    for i in range(n_p):
-        ps[i].join()
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Compute pitch and loudness")
-
-    parser.add_argument('--data_root', required=True, type=str)
-    parser.add_argument('--pitch_dir', type=str)
-    parser.add_argument('--ld_dir', type=str)
-    parser.add_argument('--n_cpu', type=int, default=1)
-
-    args = parser.parse_args()
-    main(args)

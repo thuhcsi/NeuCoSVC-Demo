@@ -1,0 +1,11 @@
+easydict
+librosa
+numpy
+praat-parselmouth
+resampy
+soundfile
+tensorflow==2.15.0
+tensorflow-probability==0.23.0
+tf-keras==2.15.0
+torch==2.0.1
+torchaudio==2.0.2

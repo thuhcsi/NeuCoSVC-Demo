@@ -1,158 +1,137 @@
 import os
-import json
 import time
-import argparse
+
 import numpy as np
-import soundfile as sf
 import torch
-import torch.nn.functional as F
+import soundfile as sf
+import argparse
 
-from modules.FastSVC import SVCNN
-from modules.wavlm_encoder import WavLMEncoder
-from utils.pitch_ld_extraction import extract_loudness, extract_pitch_ref as extract_pitch
-from utils.tools import ConfigWrapper, fast_cosine_dist
+from modules.SVCNN import SVCNN
+from utils.tools import extract_voiced_area
+from utils.pitch_extraction import extract_pitch_ref as extract_pitch, coarse_f0
 
-# the 6th layer features of wavlm are used to audio synthesis
+SPEAKER_INFORMATION_WEIGHTS = [
+    0, 0, 0, 0, 0, 0,  # layer 0-5
+    1.0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,  # layer 15
+    0, 0, 0, 0, 0, 0,  # layer 16-21
+    0,  # layer 22
+    0, 0  # layer 23-24
+]
 SPEAKER_INFORMATION_LAYER = 6
-# the mean of last 5 layers features of wavlm are used for matching in kNN
-CONTENT_INFORMATION_LAYER = [20, 21, 22, 23, 24]
 
 
-def VoiceConverter(test_utt: str, ref_utt: str, out_path: str, svc_mdl: SVCNN, wavlm_encoder: WavLMEncoder, f0_factor: float, speech_enroll=False, device=torch.device('cpu')):
-    """
-    Perform singing voice conversion and save the resulting waveform to `out_path`.
+APPLIED_INFORMATION_WEIGHTS = [
+    0, 0, 0, 0, 0, 0,  # layer 0-5
+    0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,  # layer 15
+    0, 0, 0, 0, 0.2, 0.2,  # layer 16-21
+    0.2,  # layer 22
+    0.2, 0.2  # layer 23-24
+]
 
-    Args:
-        test_utt (str): Path to the source singing waveform (24kHz, single-channel).
-        ref_utt (str): Path to the reference waveform from the target speaker (single-channel, not less than 16kHz).
-        out_path (str): Path to save the converted singing audio.
-        svc_mdl (SVCNN): Loaded FastSVC model with neural harmonic filters.
-        wavlm_encoder (WavLMEncoder): Loaded WavLM Encoder.
-        f0_factor (float): F0 shift factor.
-        speech_enroll (bool, optional): Whether the reference audio is a speech clip or a singing clip. Defaults to False.
-        device (torch.device, optional): Device to perform the conversion on. Defaults to cpu.
 
-    """
-    # Preprocess audio and extract features.
-    print('Processing feats.')
-    applied_weights = F.one_hot(torch.tensor(CONTENT_INFORMATION_LAYER), num_classes=25).float().mean(axis=0).to(device)[:, None]
+def svc(model, src_wav_path, ref_wav_path, synth_set_path=None, f0_factor=0., speech_enroll=False, out_dir="output", hallucinated_set_path=None, num_samples=15000, device='cpu'):
+    
+    wav_name = os.path.basename(src_wav_path).split('.')[0]
+    ref_name = os.path.basename(ref_wav_path).split('.')[0]
 
-    ld = extract_loudness(test_utt)
-    pitch, f0_factor = extract_pitch(test_utt, ref_utt, predefined_factor=f0_factor, speech_enroll=speech_enroll)
-    assert pitch.shape[0] == ld.shape[0], f'{test_utt} Length Mismatch: pitch length ({pitch.shape[0]}), ld length ({ld.shape[0]}).'
+    f0_src, f0_factor = extract_pitch(src_wav_path, ref_wav_path, predefined_factor=f0_factor, speech_enroll=speech_enroll)
 
-    query_feats = wavlm_encoder.get_features(test_utt, weights=applied_weights)
-    matching_set = wavlm_encoder.get_features(ref_utt, weights=applied_weights)
-    synth_set = wavlm_encoder.get_features(ref_utt, output_layer=SPEAKER_INFORMATION_LAYER)
+    pitch_src = coarse_f0(f0_src)
 
-    # Calculate the distance between the query feats and the matching feats
-    dists = fast_cosine_dist(query_feats, matching_set, device=device)
-    best = dists.topk(k=4, largest=False, dim=-1)
-    # Replace query features with corresponding nearest synth feats
-    prematched_wavlm = synth_set[best.indices].mean(dim=1).transpose(0, 1)  # (T, 1024)
+    query_mask = extract_voiced_area(src_wav_path, hop_size=480, energy_thres=0.1)
+    query_mask = torch.from_numpy(query_mask).to(device)
 
-    # Align the features: the hop_size of the wavlm feature is twice that of pitch and loudness.
-    seq_len = prematched_wavlm.shape[1] * 2
-    if seq_len > pitch.shape[0]:
-        p = seq_len - pitch.shape[0]
-        pitch = np.pad(pitch, (0, p), mode='edge')
-        ld = np.pad(ld, (0, p), mode='edge')
+    synth_weights = torch.tensor(
+        SPEAKER_INFORMATION_WEIGHTS, device=device)[:, None]
+    query_seq = model.get_features(
+        src_wav_path, weights=synth_weights)
+
+    if synth_set_path:
+        synth_set = torch.load(synth_set_path).to(device)
     else:
-        pitch = pitch[:seq_len]
-        ld = ld[:seq_len]
+        synth_set_path = f"matching_set/{ref_name}.pt"
+        synth_set = model.get_matching_set(ref_wav_path, out_path=synth_set_path).to(device)
 
-    in_feats = [prematched_wavlm.unsqueeze(0), torch.from_numpy(pitch).to(dtype=torch.float).unsqueeze(0),
-                torch.from_numpy(ld).to(dtype=torch.float).unsqueeze(0)]
-    in_feats = tuple([x_.to(device) for x_ in in_feats])
+    if hallucinated_set_path is None:
+        hallucinated_set_path = f"matching_set/{ref_name}_hallucinated_{num_samples//1000}k.npy"
+        os.system(f"python modules/Phoneme_Hallucinator_v2/scripts/speech_expansion_ins.py --cfg_file modules/Phoneme_Hallucinator_v2/exp/speech_XXL_cond/params.json --num_samples {num_samples} --path {synth_set_path} --out_path {hallucinated_set_path}")
 
-    # Inference
-    print('Inferencing.')
-    with torch.no_grad():
-        y_ = svc_mdl(*in_feats)
+    hallucinated_set = np.load(hallucinated_set_path)
+    hallucinated_set = torch.from_numpy(hallucinated_set).to(device)
 
-    # Save converted audio.
-    print('Saving audio.')
-    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-    y_ = y_.unsqueeze(0)
-    y_ = np.clip(y_.view(-1).cpu().numpy(), -1, 1)
-    sf.write(out_path, y_, 24000)
+    synth_set = torch.cat([synth_set, hallucinated_set], dim=0)
+
+    query_len = query_seq.shape[0]
+    if len(query_mask) > query_len:
+        query_mask = query_mask[:query_len]
+    else:
+        p = query_len - len(query_mask)
+        query_mask = np.pad(query_mask, (0, p))
+
+    f0_len = query_len*2
+    if len(f0_src) > f0_len:
+        f0_src = f0_src[:f0_len]
+        pitch_src = pitch_src[:f0_len]
+    else:
+        p = f0_len-len(f0_src)
+        f0_src = np.pad(f0_src, (0, p), mode='edge')
+        pitch_src = np.pad(pitch_src, (0, p), mode='edge')
+    
+    print(query_seq.shape)
+    print(synth_set.shape)
+
+    f0_src = torch.from_numpy(f0_src).float().to(device)
+    pitch_src = torch.from_numpy(pitch_src).to(device)
+
+    out_wav = model.match(query_seq, f0_src, pitch_src, synth_set, topk=4, query_mask=query_mask)
+    # out_wav is (T,) tensor converted 16kHz output wav using k=4 for kNN.
+    os.makedirs(out_dir, exist_ok=True)
+    wfname = f'{out_dir}/{wav_name}_{ref_name}_{f0_factor:.2f}_NeuCoSVCv2.wav'
+
+    sf.write(wfname, out_wav.numpy(), 24000)
+
+
+def main(a):
+    model_ckpt_path = a.model_ckpt_path
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cpu'
+    print(f'using {device} for inference')
+
+    f0factor = pow(2, a.key_shift / 12) if a.key_shift else 0.
+
+    speech_enroll = a.speech_enroll
+    model = SVCNN(model_ckpt_path, device=device)
+
+    t0 = time.time()
+    svc(model, a.src_wav_path, a.ref_wav_path, out_dir=a.out_dir, device=device, f0_factor=f0factor, speech_enroll=speech_enroll, num_samples=a.num_samples)
+    t1 = time.time()
+    print(f"{t1-t0:.2f}s to perfrom the conversion")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    parser.add_argument('--src_wav_path', required=True)
+    parser.add_argument('--ref_wav_path', required=True)
+    parser.add_argument('--model_ckpt_path',
+                        default='pretrained/G_150k.pt')
+    parser.add_argument('--out_dir', default='output')
     parser.add_argument(
-        '--src_wav_path',
-        required=True, type=str, help='The audio path for the source singing utterance.'
-    )
+        '--num_samples', type=int, default=15000,
+        help="Specify the number of Self-Supervised Learning features to be expanded")
     parser.add_argument(
-        '--ref_wav_path',
-        required=True, type=str, help='The audio path for the reference utterance.'
-    )
-    parser.add_argument(
-        '--out_path',
-        required=True, type=str, help='The audio path for the reference utterance.'
-    )
-    parser.add_argument(
-        '-cfg', '--config_file',
-        type=str, default='configs/config.json',
-        help='The model configuration file.'
-    )
-    parser.add_argument(
-        '-ckpt', '--ckpt_path',
-        type=str,
-        default='pretrained/model.pkl',
-        help='The model checkpoint path for loading.'
-    )
-    parser.add_argument(
-        '-f0factor', '--f0_factor', type=float, default=0.0,
-        help='Adjust the pitch of the source singing to match the vocal range of the target singer. \
-            The default value is 0.0, which means no pitch adjustment is applied (equivalent to f0_factor = 1.0)'
+        '--key_shift', type=int,
+        help='Adjust the pitch of the source singing. Tone the song up or down in semitones.'
     )
     parser.add_argument(
         '--speech_enroll', action='store_true',
         help='When using speech as the reference audio, the pitch of the reference audio will be increased by 1.2 times \
             when performing pitch shift to cover the pitch gap between singing and speech. \
-            Note: This option is invalid when f0_factor is specified.'
+            Note: This option is invalid when key_shift is specified.'
     )
 
-    args = parser.parse_args()
+    a = parser.parse_args()
 
-    t0 = time.time()
-
-    f0factor = args.f0_factor
-    speech_enroll_flag = args.speech_enroll
-
-    if torch.cuda.is_available():
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
-    print(f'using {device} for inference.')
-
-    # Loading model and parameters.
-    # load svc model
-    cfg = args.config_file
-    model_path = args.ckpt_path
-
-    print('Loading svc model configurations.')
-    with open(cfg) as f:
-        config = ConfigWrapper(**json.load(f))
-
-    svc_mdl = SVCNN(config)
-
-    state_dict = torch.load(model_path, map_location='cpu')
-    svc_mdl.load_state_dict(state_dict['model']['generator'], strict=False)
-    svc_mdl.to(device)
-    svc_mdl.eval()
-    # load wavlm model
-    wavlm_encoder = WavLMEncoder(ckpt_path='pretrained/WavLM-Large.pt', device=device)
-    print('wavlm loaded.')
-    # End loading model and parameters.
-    t1 = time.time()
-    print(f'loading models cost {t1-t0:.2f}s.')
-
-    VoiceConverter(test_utt=args.src_wav_path, ref_utt=args.ref_wav_path, out_path=args.out_path,
-                   svc_mdl=svc_mdl, wavlm_encoder=wavlm_encoder,
-                   f0_factor=f0factor, speech_enroll=speech_enroll_flag, device=device)
-
-    t2 = time.time()
-    print(f'converting costs {t2-t1:.2f}s.')
+    main(a)

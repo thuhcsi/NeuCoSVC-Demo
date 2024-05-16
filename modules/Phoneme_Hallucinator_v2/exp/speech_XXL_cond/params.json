@@ -1,0 +1,33 @@
+{
+    "dataset": "speech",
+    "dimension": 1024,
+    "batch_size": 50,
+    "set_size": 200,
+    "mask_type": "arb_expand",
+    "model": "pc_acset_vae",
+    "latent_encoder_hidden": [256,256,256,256],
+    "latent_dim": 256,
+    "trans_params": {
+        "transform": ["L","LR","CP","R","L","LR","CP","R","L","LR","CP","R","L","LR","CP"],
+        "dimension": 256,
+        "coupling_hids": [256,256]
+    },
+    "vae_params": {
+    	"hid_dimensions": 256,
+    	"dimension": 1024,
+    	"enc_dense_hids": [512,512,512,512],
+    	"dec_dense_hids": [512,512,512,512]
+    },
+    "use_peq_embed": 1,
+    "set_xformer_hids": [256,256,256,256],
+    "epochs": 1000,
+    "optimizer": "adam",
+    "lr": 0.0001,
+    "decay_steps": 100000,
+    "decay_rate": 0.5,
+    "clip_gradient": 1,
+    "exp_dir": "modules/Phoneme_Hallucinator_v2/exp/speech_XXL_cond",
+    "summ_freq": 100,
+    "eval_metrics": ["sam"]
+}
+

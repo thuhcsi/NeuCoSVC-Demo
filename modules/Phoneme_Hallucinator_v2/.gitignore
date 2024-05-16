@@ -1,0 +1,6 @@
+.vscode
+exp/speech_XXL_cond/weights
+*__pycache__
+*.pt
+*.npy
+*.wav

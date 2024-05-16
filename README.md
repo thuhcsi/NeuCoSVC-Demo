@@ -1,106 +1,74 @@
-# Neural Concatenative Singing Voice Conversion
+# Neural Concatenative Singing Voice Conversion v2
 
-<a href='https://thuhcsi.github.io/NeuCoSVC/'><img src='https://img.shields.io/badge/Demo-green'></a> 
-<a href='https://arxiv.org/abs/2312.04919'><img src='https://img.shields.io/badge/Paper-red'></a>
-[![GitHub](https://img.shields.io/github/stars/thuhcsi/NeuCoSVC?style=social)](https://github.com/thuhcsi/NeuCoSVC)
+NeuCoSVC: [[Paper](https://arxiv.org/abs/2312.04919)] &emsp; [[Demo Page](https://thuhcsi.github.io/NeuCoSVC/)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link)] <br>
 
-This is the official implementation of NeuCoSVC, an any-to-any singing voice conversion model from our [paper](https://arxiv.org/abs/2312.04919).
-Audio samples are available at [https://thuhcsi.github.io/NeuCoSVC/](https://thuhcsi.github.io/NeuCoSVC/). The trained checkpoints are available from [google drive](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link).
+NeuCoSVC2: [[gradio (EN) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1Hee5vFcLDdskIRr6kFTHF5LwU2avpWHs/view?usp=drive_link)]<br>
+[[Video demo (BiliBili) from Kevin](https://www.bilibili.com/video/BV1fz42127wX/?spm_id_from=333.337.search-card.all.click)] <be>
 
-![NeuCoSVC](./img/Architecture.png)
+This repository contains the official implementation of NeuCoSVC2, which is an enhanced version of [NeuCoSVC](https://arxiv.org/abs/2312.04919). The model has been trained on an extensive internal dataset comprising approximately 500 hours of singing voice data, supplemented by various open-source speech datasets. With the integration of the Phoneme Hallucinator, we have achieved significant improvements in audio quality, naturalness, and voice similarity. These enhancements are particularly noticeable when using shorter segments of reference audio.
 
-Figure: The structure of the proposed SVC system: (a) the SSL feature extracting and matching module; (b) the neural harmonic signal generator; (c) the audio synthesizer.
+## 💪 To-Do List
+- [x] Release the inference code and model checkpoint for NeuCoSVC2.
+- [ ] Make the training code for NeuCoSVC2 available.
 
-## Setup
+## 🔧 Setup Instructions
 
-### Environment
+### Environment Configuration
 
-We recommend installing the project's environment using Anaconda. The `requirements.txt` file contains a curated list of dependencies for the developing environment(Torch 2.0.1 + cu117). You can use the following commands to set up the environment:
+For an optimal development environment, we suggest using Anaconda to manage the project's dependencies. The provided `requirements.txt` outlines all necessary packages (including Torch 2.0.1 and TensorFlow 2.15). Please note that TensorFlow 2.15 requires CUDA 12.2 or above for GPU inference. To create and activate this environment, execute the following commands:
 
 ```bash
-conda create -n NeuCoSVC python=3.10.6
-conda activate NeuCoSVC
+conda create -n NeuCoSVC2 python=3.10
+conda activate NeuCoSVC2
 pip install -r requirements.txt
 ```
 
-Additionally, you can find the complete original environment used for developing in the `requirements_all.txt` file.
-
-Besides, [REAPER](https://github.com/google/REAPER) is required for pitch extraction. You need to download and build *reaper*, and then modify the path to *reaper* in the 60th line of [utils/pitch_ld_extraction.py](utils/pitch_ld_extraction.py)
+Additionally, the [REAPER](https://github.com/google/REAPER) tool is required for pitch extraction. Please download and compile *reaper*. Afterwards, ensure to update the path to the reaper executable in line 15 of the script located at [utils/pitch_extraction.py](utils/pitch_extraction.py).
 
 ### Checkpoints
 
-The checkpoint for the frozen WavLM Large encoder can be obtained from the [original WavLM repository](https://github.com/microsoft/unilm/tree/master/wavlm). 
+To set up the checkpoints for the project, you'll need to acquire the pre-trained models for the WavLM Large Encoder, the NeuCoSVC model and the Hallucinator model.
 
-The trained FastSVC model with neural harmonic filters can be downloaded from [google drive](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link)
+1. **WavLM Large Encoder:**
+   - Visit the [WavLM repository](https://github.com/microsoft/unilm/tree/master/wavlm) hosted by Microsoft on GitHub.
+   - Follow the instructions provided there to download the `WavLM-Large.pt` checkpoint file, then put the `WavLM-Large.pt` file in the `pretrained` folder.
 
-Then you need to put the WavLM-Large.pt file and model.pkl folder in the `pretrained` folder.
+2. **NeuCoSVC Model:**
+   - Access the provided [Google Drive link](https://drive.google.com/file/d/1Hee5vFcLDdskIRr6kFTHF5LwU2avpWHs/view?usp=drive_link) to download the model.
+   - Put the `G_150k.pt` file in the `pretrained` folder.
 
-## Inference
+3. **Hallucinator Model:**
+   - Access the provided [Dropbox link](https://www.dropbox.com/scl/fi/ytj3mwkf1fd0no4jtg7r7/weights.zip?rlkey=ilyxue0gpuppyzn6u01bbjiy9&dl=1) to download the model. After extracting the compressed file, place the `weights` folder into the `modules/Phoneme_Hallucinator/exp/speech_XXL_cond/` directory.
 
-Note that the source waveform must be 24kHz. `--speech_enroll` is recommended when using speech as the reference audio, and the pitch of the reference audio will be increased to 1.2 times when performing a pitch shift to cover the pitch gap between singing and speech.
+## 🌠 Inference
 
-```bash
-python infer.py --src_wav_path src-wav-path --ref_wav_path ref-wav-path --out_path out-path --speech_enroll
-```
+When you're ready to perform inference, it's important to ensure that your audio data meets the required specifications. Here's a checklist and a guide on how to proceed:
 
-## Training
+1. **Audio Requirements:**
+   - The source waveform should have a sample rate of 24kHz.
+   - Both the source and reference audio files should be in mono, not stereo.
 
-### Data Preparation
+2. **Using Speech as Reference:**
+   - If you're using speech instead of singing as the reference audio, it's recommended to use the `--speech_enroll` flag. This will help the model better adapt the characteristics of the speech to singing.
 
-Take the OpenSinger dataset as an example, the dataset needs to be **resampled to 24kHz**. 
+3. **Pitch Shift:**
+   - When using speech as the reference and aiming for a pitch shift, the pitch of the reference audio will be increased by a factor of 1.2. This adjustment helps bridge the natural pitch gap between spoken and sung vocals.
 
-```
-- OpenSinger_24k
-    |- ManRaw/
-    |   | - SingerID_SongName/
-    |   |   | - SingerID_SongName_SongClipNumber.wav/
-    |   |   | - ...
-    |   | - ...
-    |- WomanRaw/
-    |   | - 0_光年之外/
-    |   |   | - 0_光年之外_0.wav/ 
-    |   |   | - ...
-    |   | - ...
-```
-
-Then perform data preprocessing.
-
-1. Extract pitch and loudness. Specify the directories for pitch and loudness using the `--pitch_dir` and `--ld_dir` parameters respectively. If not specified, the features will be saved in the `pitch`/`loudness` folder under the `dataset-root` directory.
-
-    ```bash
-    python -m utils.pitch_ld_extraction --data_root dataset-root --pitch_dir dir-for-pitch --ld_dir dir-for-loudness --n_cpu 8
-    ```
-
-2. Extract pre-matching features of each audio piece. The program uses the average of the last five layers' features from WavLM for distance calculation and kNN. It replaces and concatenates on the corresponding feature of the 6th layer in WavLM for audio synthesis. This configuration has shown improved performance in experiments. If `--out_dir` is not specified, the features will be saved in the wavlm_features folder under the dataset-root directory.
-
-    ```bash
-    python -m dataset.prematch_dataset --data_root dataset-root --out_dir dir-for-wavlm-feats
-    ```
-
-3. Split the dataset into train, valid, and test sets, and generate the metadata files. By default, singing audio clips from the 26th and 27th male singers(OpenSinger/ManRaw/26(7)\_\*/\*.wav) and 46th and 47th female singers(OpenSinger/WomanRaw/46(7)\_\*/\*.wav) are considered as the test set. The remaining singers' audio files are randomly divided into the train set and the valid set in a 9:1 ratio. Specify the directories for features using the `--wavlm_dir`, `--pitch_dir`, and `--ld_dir` parameters. If not specified, the corresponding features will be read from the `wavlm_features`, `pitch`, and `loudness` folders under the `data_root` directory.
-
-    ```bash
-    python dataset/metadata.py --data_root dataset-root 
-    ```
-
-### Train Decoder
+4. **Running the Inference Command:**
+   - With your audio files prepared and placed in the correct directories, you'll run a command similar to the following:
 
 ```bash
-# for single GPU training:
-python start.py --data_root dataset-dir --config configs/config.json --cp_path pretrained
-# for distributed multi GPUs training:
-torchrun --nnodes=1 --nproc_per_node=4 start.py --data_root dataset-dir --config configs/config.json --cp_path pretrained
+python infer.py --src_wav_path source-wav-path --ref_wav_path reference-wav-path --out_dir out-directory --speech_enroll
 ```
 
-To modify the training configurations or model parameters, you can edit the `configs/config.json` file. 
+## 🏋️ Model Training
+Stay tuned for the release of the training code, which will be made available shortly.
 
 ## Acknowledgements
 
 This work is inspired by [kNN-VC](https://github.com/bshall/knn-vc/tree/master) and built on the [U-net SVC](https://www.isca-speech.org/archive/interspeech_2022/li22da_interspeech.html) frameworks. 
 
-We have incorporated publicly available code from the [kNN-VC](https://github.com/bshall/knn-vc/tree/master) and [WavLM](https://github.com/microsoft/unilm/tree/master/wavlm) projects.
-
-We would like to express our gratitude to the authors of kNN-VC and WavLM for sharing their codebases. Their contributions have been instrumental in the development of our project.
+We have incorporated publicly available code from the [kNN-VC](https://github.com/bshall/knn-vc/tree/master), [WavLM](https://github.com/microsoft/unilm/tree/master/wavlm) and [Phoneme_Hallucinator](https://github.com/PhonemeHallucinator/Phoneme_Hallucinator)projects. We would like to express our gratitude to the authors of kNN-VC, WavLM and Phoneme_Hallucinator for sharing their codebases. Their contributions have been instrumental in the development of our project.
 
 ## Citation
 
@@ -116,3 +84,5 @@ If this repo is helpful with your research or projects, please kindly star our r
       primaryClass={cs.SD}
 }
 ```
+
+[![Star History Chart](https://api.star-history.com/svg?repos=thuhcsi/NeuCoSVC&type=Date)](https://star-history.com/#thuhcsi/NeuCoSVC&Date)

@@ -17,6 +17,16 @@ def AWeightingLoudness(x, sr, n_fft, n_shift, win_length=None, window='hann', ce
 
     return perceptual_loudness
 
+def VoicedAreaDetection(x, sr, n_fft, n_shift, win_length=None, window='hann', center=True, pad_mode='reflect', hi_freq=1000, energy_thres=0.5):
+    assert x.ndim == 1, 'The audio has %d channels, but so far we only support single-channel audios.' %(x.ndim)
+    # [Freq, Time]
+    mag_stft = np.abs(stft(x, n_fft, n_shift, win_length, window, center, pad_mode).T)
+    freq_axis = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
+    filtered_mag_stft = mag_stft[freq_axis <= hi_freq]
+    loudness = np.log10(np.mean(np.power(10, filtered_mag_stft/10), axis=0)+1e-5)
+    
+    return loudness >= energy_thres
+
 
 def stft(
     x, n_fft, n_shift, win_length=None, window="hann", center=True, pad_mode="reflect"
@@ -92,7 +102,7 @@ def stft2logmelspectrogram(x_stft, fs, n_mels, n_fft, fmin=None, fmax=None, eps=
     # spc: (Time, Channel, Freq) or (Time, Freq)
     spc = np.abs(x_stft)
     # mel_basis: (Mel_freq, Freq)
-    mel_basis = librosa.filters.mel(fs, n_fft, n_mels, fmin, fmax)
+    mel_basis = librosa.filters.mel(sr=fs, n_fft=n_fft, n_mels=n_mels, fmin=fmin, fmax=fmax)
     # lmspc: (Time, Channel, Mel_freq) or (Time, Mel_freq)
     lmspc = np.log10(np.maximum(eps, np.dot(spc, mel_basis.T)))
 
