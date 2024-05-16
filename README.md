@@ -1,9 +1,8 @@
 # Neural Concatenative Singing Voice Conversion
 
-NeuCoSVC: [[Paper](https://arxiv.org/abs/2312.04919)] &emsp; [[Demo Page](https://thuhcsi.github.io/NeuCoSVC/)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link)] <br>
+NeuCoSVC: [[Paper](https://arxiv.org/abs/2312.04919)] &emsp; [[Demo Page](https://thuhcsi.github.io/NeuCoSVC/)] &emsp; [[Checkpoints (google drive)](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link)] <br>
 
-NeuCoSVC2: [[Gradio (English) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] <br>
-[[Video Demo (BiliBili) from Kevin](https://www.bilibili.com/video/BV1fz42127wX/?spm_id_from=333.337.search-card.all.click)] <be>
+NeuCoSVC2: [[Gradio (English) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Video Demo (BiliBili) from Kevin](https://www.bilibili.com/video/BV1fz42127wX/?spm_id_from=333.337.search-card.all.click)] <br>
 
 This repository contains the official implementation of NeuCoSVC, a versatile model for any-to-any singing voice conversion. Please note that NeuCoSVC has been upgraded to NeuCoSVC2. For the latest version, switch to the NeuCoSVC2 branch!
 
