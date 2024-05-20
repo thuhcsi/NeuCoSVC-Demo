@@ -3,6 +3,21 @@ Copied from espnet: https://github.com/espnet/espnet/blob/master/espnet/transfor
 '''
 import librosa
 import numpy as np
+import resampy
+import soundfile as sf
+
+
+def load_wav(wav_path, sr=24000):
+    # wav, fs = librosa.load(wav_path, sr=sr)
+    wav, fs = sf.read(wav_path)
+    if fs != sr:
+        wav = resampy.resample(wav, fs, sr, axis=0)
+        fs = sr
+    # assert fs == sr, f"input audio sample rate must be {sr}Hz. Got {fs}"
+    peak = np.abs(wav).max()
+    if peak > 1.0:
+        wav /= peak
+    return wav, fs
 
 
 # Extract Log-Scaled A-Weighting Loudness from Audio. Added by Xu Li.
@@ -17,10 +32,12 @@ def AWeightingLoudness(x, sr, n_fft, n_shift, win_length=None, window='hann', ce
 
     return perceptual_loudness
 
-def VoicedAreaDetection(x, sr, n_fft, n_shift, win_length=None, window='hann', center=True, pad_mode='reflect', hi_freq=1000, energy_thres=0.5):
+
+def extract_voiced_area(wav_path, n_fft=2048, hop_size=480, win_length=2048, window='hann', center=True, pad_mode='reflect', hi_freq=1000, energy_thres=0.5):
+    x, sr = load_wav(wav_path)
     assert x.ndim == 1, 'The audio has %d channels, but so far we only support single-channel audios.' %(x.ndim)
     # [Freq, Time]
-    mag_stft = np.abs(stft(x, n_fft, n_shift, win_length, window, center, pad_mode).T)
+    mag_stft = np.abs(stft(x, n_fft, hop_size, win_length, window, center, pad_mode).T)
     freq_axis = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
     filtered_mag_stft = mag_stft[freq_axis <= hi_freq]
     loudness = np.log10(np.mean(np.power(10, filtered_mag_stft/10), axis=0)+1e-5)

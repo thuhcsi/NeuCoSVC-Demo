@@ -72,17 +72,6 @@ class ResBlock2(torch.nn.Module):
             remove_weight_norm(l)
 
 
-class PitchEncoder(torch.nn.Module):
-    def __init__(self, h):
-        super(PitchEncoder, self).__init__()
-        self.lin_pre = nn.Linear(h.hubert_dim, h.hifi_dim)
-        self.pitch_emb = nn.Embedding(256, h.hifi_dim)
-    
-    def forward(self, x, pitch):
-        x = self.lin_pre(x) + self.pitch_emb(pitch)
-        return x
-
-
 class SineGen(torch.nn.Module):
     """ Definition of sine generator
     SineGen(samp_rate, harmonic_num = 0, 
@@ -242,6 +231,8 @@ class SourceModuleHnNSF(torch.nn.Module):
 class GeneratorNSF(torch.nn.Module):
     def __init__(self, h):
         super(GeneratorNSF, self).__init__()
+        self.lin_pre = nn.Linear(h.hubert_dim, h.vocoder_dim)
+        self.pitch_emb = nn.Embedding(h.f0_bins, h.vocoder_dim)
         self.num_kernels = len(h.resblock_kernel_sizes)
         self.num_upsamples = len(h.upsample_rates)
         self.m_source = SourceModuleHnNSF(
@@ -250,7 +241,7 @@ class GeneratorNSF(torch.nn.Module):
         )
         self.noise_convs = nn.ModuleList()
 
-        self.conv_pre = weight_norm(Conv1d(h.hifi_dim, h.upsample_initial_channel, 7, 1, padding=3))
+        self.conv_pre = weight_norm(Conv1d(h.vocoder_dim, h.upsample_initial_channel, 7, 1, padding=3))
         resblock = ResBlock1 if h.resblock == '1' else ResBlock2
 
         self.ups = nn.ModuleList()
@@ -278,11 +269,13 @@ class GeneratorNSF(torch.nn.Module):
         self.conv_post.apply(init_weights)
         self.upp = int(np.prod(h.upsample_rates))
 
-    def forward(self, x, f0):
-        """ `x` as (bs, seq_len, dim), regular hifi assumes input of shape (bs, n_mels, seq_len) """
+    def forward(self, x, f0, pitch):
+        """ `x` as (bs, seq_len, dim) """
+        x = self.lin_pre(x) + self.pitch_emb(pitch)
+
         x = x.permute(0, 2, 1) # (bs, seq_len, dim) --> (bs, dim, seq_len)
         har_source = self.m_source(f0, self.upp).transpose(1, 2)
-
+        
         x = self.conv_pre(x)
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, LRELU_SLOPE)

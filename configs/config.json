@@ -1,7 +1,7 @@
 {
     "resblock": "1",
     "num_gpus": 0,
-    "batch_size": 256,
+    "batch_size": 64,
     "learning_rate": 0.0002,
     "adam_b1": 0.8,
     "adam_b2": 0.99,
@@ -15,10 +15,11 @@
     "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],
 
     "hubert_dim": 1024,
-    "hifi_dim": 512,
+    "vocoder_dim": 512,
 
     "segment_size": 7680,
     "num_mels": 80,
+    "f0_bins": 256,
     "num_freq": 1025,
     "n_fft": 1024,
     "hop_size": 240,

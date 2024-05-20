@@ -2,14 +2,15 @@
 
 NeuCoSVC: [[Paper](https://arxiv.org/abs/2312.04919)] &emsp; [[Demo Page](https://thuhcsi.github.io/NeuCoSVC/)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link)] <br>
 
-NeuCoSVC2: [[gradio (EN) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1Hee5vFcLDdskIRr6kFTHF5LwU2avpWHs/view?usp=drive_link)]<br>
+NeuCoSVC2: [[gradio (EN) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link)]<br>
 [[Video demo (BiliBili) from Kevin](https://www.bilibili.com/video/BV1fz42127wX/?spm_id_from=333.337.search-card.all.click)] <be>
 
 This repository contains the official implementation of NeuCoSVC2, which is an enhanced version of [NeuCoSVC](https://arxiv.org/abs/2312.04919). The model has been trained on an extensive internal dataset comprising approximately 500 hours of singing voice data, supplemented by various open-source speech datasets. With the integration of the Phoneme Hallucinator, we have achieved significant improvements in audio quality, naturalness, and voice similarity. These enhancements are particularly noticeable when using shorter segments of reference audio.
 
-## 💪 To-Do List
-- [x] Release the inference code and model checkpoint for NeuCoSVC2.
-- [ ] Make the training code for NeuCoSVC2 available.
+## 📝 Changelog
+- __[2024.05.20]__:  Release the training code to the repository and updated the checkpoint. Please use the [provided link](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link) to download the `G_150k.pt` file again for inference.
+
+- __[2024.05.16]__: Release the inference code and model checkpoint for NeuCoSVC2.
 
 ## 🔧 Setup Instructions
 
@@ -34,7 +35,7 @@ To set up the checkpoints for the project, you'll need to acquire the pre-traine
    - Follow the instructions provided there to download the `WavLM-Large.pt` checkpoint file, then put the `WavLM-Large.pt` file in the `pretrained` folder.
 
 2. **NeuCoSVC Model:**
-   - Access the provided [Google Drive link](https://drive.google.com/file/d/1Hee5vFcLDdskIRr6kFTHF5LwU2avpWHs/view?usp=drive_link) to download the model.
+   - Access the provided [Google Drive link](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link) to download the model.
    - Put the `G_150k.pt` file in the `pretrained` folder.
 
 3. **Hallucinator Model:**
@@ -62,7 +63,54 @@ python infer.py --src_wav_path source-wav-path --ref_wav_path reference-wav-path
 ```
 
 ## 🏋️ Model Training
-Stay tuned for the release of the training code, which will be made available shortly.
+
+### Data Preparation
+
+To prepare your data for training, you need to follow a series of preprocessing steps. These steps involve extracting pitch features and pre-matching features for each audio piece, and finally splitting the dataset and generating metadata files. Here's how you can perform each step, taking the OpenSinger dataset as an example. Please note that audio files need to be **resampled to 24kHz**.
+
+### 1. Extract Pitch
+
+Run the following command to extract pitch and loudness features from your audio dataset:
+
+```bash
+python -m utils.pitch_extraction --data_root dataset-root --pitch_dir dir-for-pitch --n_cpu 8
+```
+
+- `--data_root` specifies the root directory of your dataset.
+- `--pitch_dir` is the directories where you want to save the pitch features. If not specified, they will be saved in the `pitch` folder under `dataset-root`.
+- `--n_cpu` indicates the number of CPU cores to use for processing.
+
+### 2. Extract Pre-Matching Features
+
+To extract pre-matching features, use the following command:
+
+```bash
+python -m dataset.prematch_dataset --data_root dataset-root --out_dir dir-for-wavlm-feats
+```
+
+- This script will process the audio files and extract the 6th layer features of the WavLM model. 
+- `--out_dir` is the directory where you want to save the WavLM features. If not specified, they will be saved in the `wavlm_features` folder under `dataset-root`.
+
+### 3. Split Dataset and Generate Metadata
+
+Finally, to split the dataset and generate metadata files, run:
+
+```bash
+python dataset/metadata.py --data_root dataset-root
+```
+
+- This will create three CSV files in the `dataset` folder. These files correspond to the data path of the training set, validation set, and test set, respectively. These three files will be used in subsequent model training. 
+- By default, singing audio clips from the 26th and 27th male singers(OpenSinger/ManRaw/26(7)\_\*/\*.wav) and 46th and 47th female singers(OpenSinger/WomanRaw/46(7)\_\*/\*.wav) are considered as the test set. The remaining singers' audio files are randomly divided into the train set and the valid set in a 9:1 ratio.
+- If you need to specify where to read the features from, you can use `--wavlm_dir` and `--pitch_dir` to point to the respective directories. If not specified, it will look for features in the `wavlm_features` and `pitch` folders under `data_root`.
+
+### Decoder Training
+
+```bash
+python train.py --input_training_file dataset/opensinger-train.csv --input_validation_file dataset/opensinger-valid.csv --ckpt_dir pretrained --config configs/config.json
+```
+
+The two CSV files mentioned in the command line, `opensinger-train.csv` and `opensinger-valid.csv`, are obtained during the previous step of data preparation. To modify the training configurations or model parameters, you can edit the `configs/config.json` file. 
+Additionally, you can specify the training epochs, stdout interval, checkpoint interval, summary interval, and validation interval by using the following options: `--training_epochs`, `--stdout_interval`, `--checkpoint_interval`, `--summary_interval`, and `--validation_interval`, respectively. 
 
 ## Acknowledgements
 

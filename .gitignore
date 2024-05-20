@@ -1,2 +1,5 @@
 *__pycache__
 pretrained/*
+*.pt
+*.npy
+*.wav

@@ -4,7 +4,7 @@ import random
 import librosa
 import parselmouth
 
-from utils.tools import load_wav
+from utils.spectrogram import load_wav
 
 np.random.seed(0)
 random.seed(0)
@@ -134,6 +134,16 @@ def compute_pitch(wav_path: str, pitch_path: str=None, frame_period=0.01):
 
 
 def coarse_f0(f0):
+    """
+    Converts the fundamental frequency (f0) values to coarse f0 values.
+
+    Args:
+        f0 (ndarray): Array of fundamental frequency values.
+
+    Returns:
+        ndarray: Array of coarse f0 values.
+
+    """
     f0_bin = 256
     f0_max = 1000.0
     f0_min = 65.0
@@ -192,3 +202,47 @@ def extract_pitch_ref(wav_path: str, ref_path: str, predefined_factor=0, speech_
     source_f0 = source_f0 * factor
 
     return source_f0, factor
+
+
+def go(files, audio_dir, pitch_dir, rank):
+    if rank == 0:
+        pb = tqdm(files)
+    else:
+        pb = files
+
+    for file in pb:
+        f0 = compute_pitch(file, (pitch_dir/file.relative_to(audio_dir)).with_suffix('.npy'))
+
+
+def main(args):
+    data_root = Path(args.data_root)
+    pitch_dir = Path(args.pitch_dir) if args.pitch_dir is not None else data_root/'pitch'
+    n_p = args.n_cpu
+    files = list(data_root.rglob('*.wav'))
+    print(f"{len(files)} files to extract")
+    ps = []
+    for i in range(n_p):
+        p = Process(
+            target=go,
+            args=(files[i::n_p], data_root, pitch_dir, i)
+        )
+        ps.append(p)
+        p.start()
+    for i in range(n_p):
+        ps[i].join()
+
+
+if __name__ == '__main__':
+    import argparse
+    from tqdm import tqdm
+    from pathlib import Path
+    from multiprocessing import Process
+
+    parser = argparse.ArgumentParser(description="Compute pitch and loudness")
+
+    parser.add_argument('--data_root', required=True, type=str)
+    parser.add_argument('--pitch_dir', type=str)
+    parser.add_argument('--n_cpu', type=int, default=1)
+
+    args = parser.parse_args()
+    main(args)

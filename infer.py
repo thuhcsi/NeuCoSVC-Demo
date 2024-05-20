@@ -7,7 +7,7 @@ import soundfile as sf
 import argparse
 
 from modules.SVCNN import SVCNN
-from utils.tools import extract_voiced_area
+from utils.spectrogram import extract_voiced_area
 from utils.pitch_extraction import extract_pitch_ref as extract_pitch, coarse_f0
 
 SPEAKER_INFORMATION_WEIGHTS = [
@@ -32,7 +32,21 @@ APPLIED_INFORMATION_WEIGHTS = [
 
 
 def svc(model, src_wav_path, ref_wav_path, synth_set_path=None, f0_factor=0., speech_enroll=False, out_dir="output", hallucinated_set_path=None, num_samples=15000, device='cpu'):
-    
+    """
+    Perform singing voice conversion and save the resulting waveform to `out_dir`.
+
+    Args:
+        src_wav_path (str): Path to the source singing waveform (24kHz, single-channel).
+        ref_wav_path (str): Path to the reference waveform from the target speaker (single-channel, not less than 16kHz).
+        out_dir (str): Directory to save the converted singing audio.
+        model (SVCNN): Loaded SVC model.
+        f0_factor (float): F0 shift factor.
+        speech_enroll (bool, optional): Whether the reference audio is a speech clip or a singing clip. Defaults to False.
+        hallucinated_set_path (str): Path to the hallucinated set. If specified, it will be directly read. Otherwise, the matching set will be computed first, and then the hallucinator will be executed to obtain the hallucinated set.
+        num_samples(int): Specifies the number of frames to be expanded for SSL features.
+        device (torch.device, optional): Device to perform the conversion on. Defaults to cpu.
+
+    """
     wav_name = os.path.basename(src_wav_path).split('.')[0]
     ref_name = os.path.basename(ref_wav_path).split('.')[0]
 

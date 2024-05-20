@@ -10,9 +10,10 @@ import torchaudio.transforms as T
 from torch import Tensor
 from torchaudio.sox_effects import apply_effects_tensor
 
-from .models import GeneratorNSF as Generator, PitchEncoder as PitchEmbedding
+from .models import GeneratorNSF as Generator
 from .wavlm.WavLM import WavLM, WavLMConfig
-from utils.tools import AttrDict, load_wav
+from utils.tools import AttrDict, fast_cosine_dist
+from utils.spectrogram import load_wav
 
 
 SPEAKER_INFORMATION_WEIGHTS = [
@@ -24,17 +25,6 @@ SPEAKER_INFORMATION_WEIGHTS = [
     0, 0 # layer 23-24
 ]
 SPEAKER_INFORMATION_LAYER = 6
-
-
-def fast_cosine_dist(source_feats: Tensor, matching_pool: Tensor, device: str = 'cpu') -> Tensor:
-    """ Like torch.cdist, but fixed dim=-1 and for cosine distance."""
-    source_norms = torch.norm(source_feats, p=2, dim=-1).to(device)
-    matching_norms = torch.norm(matching_pool, p=2, dim=-1)
-    dotprod = -torch.cdist(source_feats[None].to(device), matching_pool[None], p=2)[0]**2 + source_norms[:, None]**2 + matching_norms[None]**2
-    dotprod /= 2
-
-    dists = 1 - ( dotprod / (source_norms[:, None] * matching_norms[None]) )
-    return dists
 
 
 class SVCNN(nn.Module):
@@ -52,15 +42,12 @@ class SVCNN(nn.Module):
             data = f.read()
         json_config = json.loads(data)
         model_cfg = AttrDict(json_config)
-        pitch_emb = PitchEmbedding(model_cfg).to(device)
         model = Generator(model_cfg).to(device)
         state_dict_g = torch.load(model_ckpt_path, map_location='cpu')
-        pitch_emb.load_state_dict(state_dict_g['pitch_encoder'])
         model.load_state_dict(state_dict_g['generator'])
         model.remove_weight_norm()
-        self.pitch_emb = pitch_emb.to(device).eval()
         self.model = model.to(device).eval()
-        print(f"Generator loaded with {sum([p.numel() for p in model.parameters() if p.requires_grad]) + sum([p.numel() for p in pitch_emb.parameters() if p.requires_grad]):,d} parameters.")
+        print(f"Generator loaded with {sum([p.numel() for p in model.parameters() if p.requires_grad]):,d} parameters.")
         self.h = model_cfg
         # load wavlm
         wavlm_ckpt = torch.load(wavlm_ckpt_path, map_location='cpu')
@@ -103,8 +90,8 @@ class SVCNN(nn.Module):
         
 
     @torch.inference_mode()
-    def vocode(self, c: Tensor, pitch:Tensor) -> Tensor:
-        y_g_hat = self.model(c, pitch)
+    def vocode(self, c: Tensor, f0:Tensor, pitch:Tensor) -> Tensor:
+        y_g_hat = self.model(c, f0, pitch)
         y_g_hat = y_g_hat.squeeze(1)
         return y_g_hat
 
@@ -194,9 +181,8 @@ class SVCNN(nn.Module):
             query_mask = query_mask[..., None].repeat([1, out_feats.shape[-1]])
             out_feats = out_feats * query_mask + query_seq * (query_mask == False)
         out_feats = torch.repeat_interleave(out_feats, 2, 0)
-        out_feats = self.pitch_emb(out_feats, pitch_bins)
         
-        prediction = self.vocode(out_feats[None].to(device), pitch.unsqueeze(0)).cpu().squeeze()
+        prediction = self.vocode(out_feats[None].to(device), pitch.unsqueeze(0), pitch_bins.unsqueeze(0)).cpu().squeeze()
         
         # normalization
         if tgt_loudness_db is not None:
