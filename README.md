@@ -8,7 +8,7 @@ NeuCoSVC2: [[gradio (EN) (coming soon)](https://openxlab.org.cn/apps/detail/Kevi
 This repository contains the official implementation of NeuCoSVC2, which is an enhanced version of [NeuCoSVC](https://arxiv.org/abs/2312.04919). The model has been trained on an extensive internal dataset comprising approximately 500 hours of singing voice data, supplemented by various open-source speech datasets. With the integration of the Phoneme Hallucinator, we have achieved significant improvements in audio quality, naturalness, and voice similarity. These enhancements are particularly noticeable when using shorter segments of reference audio.
 
 ## 📝 Changelog
-- __[2024.05.20]__:  Release the training code to the repository and updated the checkpoint. Please use the [provided link](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link) to download the `G_150k.pt` file again for inference.
+- __[2024.05.20]__:  Release the training code and update the checkpoint. Please use the [provided link](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link) to download the `G_150k.pt` file again for inference.
 
 - __[2024.05.16]__: Release the inference code and model checkpoint for NeuCoSVC2.
 
