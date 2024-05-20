@@ -2,12 +2,12 @@
 
 NeuCoSVC: [[Paper](https://arxiv.org/abs/2312.04919)] &emsp; [[Demo Page](https://thuhcsi.github.io/NeuCoSVC/)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1QjoQ6mt7-OZPHF4X20TXbikYdg8NlepR/view?usp=drive_link)] <br>
 
-NeuCoSVC2: [[gradio (EN) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link)]<br>
+NeuCoSVC2: [[Gradio (EN) (coming soon)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Gradio (中文)](https://openxlab.org.cn/apps/detail/Kevin676/NeuCoSVC2)] &emsp; [[Checkpoints (google dirve)](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link)]<br>
 [[Video demo (BiliBili) from Kevin](https://www.bilibili.com/video/BV1fz42127wX/?spm_id_from=333.337.search-card.all.click)] <be>
 
 This repository contains the official implementation of NeuCoSVC2, which is an enhanced version of [NeuCoSVC](https://arxiv.org/abs/2312.04919). The model has been trained on an extensive internal dataset comprising approximately 500 hours of singing voice data, supplemented by various open-source speech datasets. With the integration of the Phoneme Hallucinator, we have achieved significant improvements in audio quality, naturalness, and voice similarity. These enhancements are particularly noticeable when using shorter segments of reference audio.
 
-## 📝 Changelog
+## 📝 Change Log
 - __[2024.05.20]__:  Release the training code and update the checkpoint. Please use the [provided link](https://drive.google.com/file/d/1yDnT4Ah8Nlzq3QIff4ur4rz5CVpwYoip/view?usp=drive_link) to download the `G_150k.pt` file again for inference.
 
 - __[2024.05.16]__: Release the inference code and model checkpoint for NeuCoSVC2.
